@@ -818,11 +818,11 @@ function LoginPage({ onLogin }) {
 export default function App() {
   const [session, setSession] = useState(null);
   useEffect(() => {
-    const saved = sessionStorage.getItem("arbi_session");
+    const saved = localStorage.getItem("arbi_session");
     if (saved) setSession(JSON.parse(saved));
   }, []);
-  const handleLogin = (s) => { sessionStorage.setItem("arbi_session", JSON.stringify(s)); setSession(s); };
-  const handleLogout = () => { sessionStorage.removeItem("arbi_session"); setSession(null); };
+  const handleLogin = (s) => { localStorage.setItem("arbi_session", JSON.stringify(s)); setSession(s); };
+  const handleLogout = () => { localStorage.removeItem("arbi_session"); setSession(null); };
   if (!session) return <LoginPage onLogin={handleLogin} />;
   if (session.role === "admin") return <AdminPage onLogout={handleLogout} />;
   return <ManagerPage manager={session.manager} onLogout={handleLogout} />;
