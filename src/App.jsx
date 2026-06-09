@@ -482,9 +482,9 @@ function ManagerPage({ manager, onLogout }) {
   const saveEdit = async () => {
     if (!editingDeposit) return;
     const { platformId, count, amount } = editingDeposit;
-    const cnt = parseInt(count) || 0;
-    const amt = parseFloat(amount) || 0;
-    if (cnt <= 0 || amt <= 0) { showToast("Введи корректные значения", "error"); return; }
+    const cnt = parseInt(count) ?? 0;
+    const amt = parseFloat(amount) ?? 0;
+    if (cnt < 0 || amt < 0) { showToast("Введи корректные значения", "error"); return; }
     const dep = getDeposit(platformId);
     if (!dep) return;
     const prevState = { count: dep.count, amount: Number(dep.amount) };
@@ -494,6 +494,21 @@ function ManagerPage({ manager, onLogout }) {
       await supabase.from("deposits").update(prevState).eq("id", dep.id);
       setToast(null);
       showToast("Изменение отменено");
+      load();
+    });
+    load();
+  };
+
+  const resetDeposit = async (platformId) => {
+    const dep = getDeposit(platformId);
+    if (!dep) return;
+    const prevState = { count: dep.count, amount: Number(dep.amount) };
+    await supabase.from("deposits").update({ count: 0, amount: 0 }).eq("id", dep.id);
+    setEditingDeposit(null);
+    showToast("Данные сброшены", "ok", async () => {
+      await supabase.from("deposits").update(prevState).eq("id", dep.id);
+      setToast(null);
+      showToast("Сброс отменён");
       load();
     });
     load();
@@ -530,6 +545,7 @@ function ManagerPage({ manager, onLogout }) {
             ))}
             <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
               <button onClick={saveEdit} style={{ flex: 1, background: "#6366f1", color: "#fff", border: "none", padding: "11px", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 14 }}>Сохранить</button>
+              <button onClick={() => resetDeposit(editingDeposit.platformId)} style={{ background: "#7f1d1d", border: "none", color: "#fca5a5", padding: "11px 16px", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 14 }}>Сбросить</button>
               <button onClick={() => setEditingDeposit(null)} style={{ flex: 1, background: "#1e2235", color: "#94a3b8", border: "1px solid #2d3148", padding: "11px", borderRadius: 8, cursor: "pointer" }}>Отмена</button>
             </div>
           </div>
@@ -593,7 +609,7 @@ function ManagerPage({ manager, onLogout }) {
                           <span style={{ color: "#64748b", fontSize: 13 }}>Сумма: <strong style={{ color: "#cbd5e1" }}>{totalAmount.toFixed(0)}€</strong></span>
                         </div>
                         <button onClick={() => startEdit(p.id)} style={{ background: "transparent", border: "1px solid #3d4268", color: "#94a3b8", padding: "4px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
-                          ✏️ Изменить
+                          Изменить
                         </button>
                       </div>
                     )}
