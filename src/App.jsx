@@ -6,15 +6,24 @@ const SUPABASE_KEY = "sb_publishable_g7EPoWwXGTZjQBpkW6unTg_FAxKMGfh";
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const ADMIN_PASSWORD = "admin2026";
 
-function Toast({ msg, type }) {
+function Toast({ msg, type, onUndo }) {
   if (!msg) return null;
   return (
     <div style={{
       position: "fixed", bottom: 24, right: 24, zIndex: 9999,
-      background: type === "error" ? "#ef4444" : "#22c55e",
-      color: "#fff", padding: "12px 20px", borderRadius: 8,
-      fontWeight: 600, fontSize: 14, boxShadow: "0 4px 20px rgba(0,0,0,0.3)"
-    }}>{msg}</div>
+      background: type === "error" ? "#ef4444" : "#1e2235",
+      border: "1px solid " + (type === "error" ? "#ef4444" : "#3d4268"),
+      color: "#fff", padding: "12px 20px", borderRadius: 10,
+      fontWeight: 600, fontSize: 14, boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+      display: "flex", alignItems: "center", gap: 14
+    }}>
+      <span>{msg}</span>
+      {onUndo && (
+        <button onClick={onUndo} style={{ background: "#6366f1", border: "none", color: "#fff", padding: "4px 12px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
+          Отменить
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -27,15 +36,13 @@ function AdminPage({ onLogout }) {
   const [newName, setNewName] = useState("");
   const [toast, setToast] = useState(null);
   const [tab, setTab] = useState("overview");
-
-  // Platform form state
   const [showPlatformForm, setShowPlatformForm] = useState(false);
   const [editingPlatform, setEditingPlatform] = useState(null);
   const [pForm, setPForm] = useState({ name: "", target_avg_check: "", date_added: "", is_active: true });
 
-  const showToast = (msg, type = "ok") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+  const showToast = (msg, type = "ok", onUndo = null) => {
+    setToast({ msg, type, onUndo });
+    setTimeout(() => setToast(null), 4000);
   };
 
   const load = async () => {
@@ -125,7 +132,6 @@ function AdminPage({ onLogout }) {
     const deps = deposits.filter(d => d.manager_id === m.id);
     const totalCount = deps.reduce((s, d) => s + d.count, 0);
     const totalAmount = deps.reduce((s, d) => s + Number(d.amount), 0);
-    // Per platform breakdown
     const byPlatform = activePlatforms.map(p => {
       const pd = deps.filter(d => d.platform_id === p.id);
       const cnt = pd.reduce((s, d) => s + d.count, 0);
@@ -136,16 +142,15 @@ function AdminPage({ onLogout }) {
     return { ...m, totalCount, totalAmount, byPlatform };
   });
 
-  const S = { // shared styles
+  const S = {
     th: { padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: "1px solid #2d3148" },
     td: { padding: "13px 14px", borderBottom: "1px solid #1a1d27" },
   };
 
   return (
     <div style={{ minHeight: "100vh", background: "#0f1117", color: "#e2e8f0", fontFamily: "'Inter', sans-serif" }}>
-      {toast && <Toast msg={toast.msg} type={toast.type} />}
+      {toast && <Toast msg={toast.msg} type={toast.type} onUndo={toast.onUndo} />}
 
-      {/* Platform form modal */}
       {showPlatformForm && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ background: "#1a1d27", border: "1px solid #2d3148", borderRadius: 14, padding: 28, width: 400 }}>
@@ -170,7 +175,6 @@ function AdminPage({ onLogout }) {
         </div>
       )}
 
-      {/* Header */}
       <div style={{ background: "#1a1d27", borderBottom: "1px solid #2d3148", padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#6366f1" }} />
@@ -180,7 +184,6 @@ function AdminPage({ onLogout }) {
         <button onClick={onLogout} style={{ background: "transparent", border: "1px solid #3d4268", color: "#94a3b8", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13 }}>Выйти</button>
       </div>
 
-      {/* Tabs */}
       <div style={{ background: "#1a1d27", borderBottom: "1px solid #2d3148", padding: "0 32px", display: "flex" }}>
         {[["overview", "Сводка"], ["managers", "Менеджеры"], ["platforms", "Платформы"], ["offers", "Офферы"]].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} style={{
@@ -193,16 +196,13 @@ function AdminPage({ onLogout }) {
 
       <div style={{ padding: "32px", maxWidth: 1200, margin: "0 auto" }}>
 
-        {/* OVERVIEW TAB */}
         {tab === "overview" && (
           <div>
             <h2 style={{ color: "#fff", marginBottom: 24, fontSize: 20 }}>Общий СЧ по платформам</h2>
             <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 40 }}>
               <thead>
                 <tr style={{ background: "#1e2235" }}>
-                  {["Платформа", "Кол-во депов", "Сумма", "СЧ ФАКТ", "СЧ ЦЕЛЬ", "КАПА", "Выполнено", "Статус"].map(h => (
-                    <th key={h} style={S.th}>{h}</th>
-                  ))}
+                  {["Платформа", "Кол-во депов", "Сумма", "СЧ ФАКТ", "СЧ ЦЕЛЬ", "КАПА", "Выполнено", "Статус"].map(h => <th key={h} style={S.th}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -218,23 +218,14 @@ function AdminPage({ onLogout }) {
                       <td style={{ ...S.td, color: "#94a3b8" }}>{p.totalCount}</td>
                       <td style={{ ...S.td, color: "#94a3b8" }}>{p.totalAmount.toFixed(0)}€</td>
                       <td style={S.td}>
-                        <span style={{
-                          background: p.totalCount === 0 ? "#1e2235" : ok ? "#166534" : "#7f1d1d",
-                          color: p.totalCount === 0 ? "#64748b" : ok ? "#86efac" : "#fca5a5",
-                          padding: "4px 10px", borderRadius: 6, fontWeight: 700, fontSize: 13
-                        }}>{p.totalCount === 0 ? "—" : p.avgCheck.toFixed(1) + "€"}</span>
+                        <span style={{ background: p.totalCount === 0 ? "#1e2235" : ok ? "#166534" : "#7f1d1d", color: p.totalCount === 0 ? "#64748b" : ok ? "#86efac" : "#fca5a5", padding: "4px 10px", borderRadius: 6, fontWeight: 700, fontSize: 13 }}>
+                          {p.totalCount === 0 ? "—" : p.avgCheck.toFixed(1) + "€"}
+                        </span>
                       </td>
                       <td style={{ ...S.td, color: "#94a3b8" }}>{p.target_avg_check}€</td>
                       <td style={{ ...S.td, color: "#94a3b8" }}>{p.offer?.cap ?? "—"}</td>
                       <td style={S.td}>
-                        {p.offer ? (
-                          <span style={{ color: "#94a3b8", fontSize: 13 }}>
-                            {p.totalCount} / {p.offer.cap}{" "}
-                            <span style={{ color: p.totalCount >= p.offer.cap ? "#86efac" : "#f59e0b" }}>
-                              ({Math.round((p.totalCount / p.offer.cap) * 100)}%)
-                            </span>
-                          </span>
-                        ) : "—"}
+                        {p.offer ? <span style={{ color: "#94a3b8", fontSize: 13 }}>{p.totalCount} / {p.offer.cap} <span style={{ color: p.totalCount >= p.offer.cap ? "#86efac" : "#f59e0b" }}>({Math.round((p.totalCount / p.offer.cap) * 100)}%)</span></span> : "—"}
                       </td>
                       <td style={S.td}>
                         <span style={{ background: isActive ? "#14532d" : "#1e2235", color: isActive ? "#86efac" : "#64748b", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
@@ -262,9 +253,7 @@ function AdminPage({ onLogout }) {
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
                         <tr style={{ background: "#151824" }}>
-                          {["Платформа", "Депи", "Сумма", "СЧ цель", "СЧ факт"].map(h => (
-                            <th key={h} style={{ ...S.th, padding: "8px 20px" }}>{h}</th>
-                          ))}
+                          {["Платформа", "Депи", "Сумма", "СЧ цель", "СЧ факт"].map(h => <th key={h} style={{ ...S.th, padding: "8px 20px" }}>{h}</th>)}
                         </tr>
                       </thead>
                       <tbody>
@@ -277,9 +266,7 @@ function AdminPage({ onLogout }) {
                               <td style={{ padding: "10px 20px", color: "#94a3b8", fontSize: 13 }}>{p.amt.toFixed(0)}€</td>
                               <td style={{ padding: "10px 20px", color: "#94a3b8", fontSize: 13 }}>{p.target_avg_check}€</td>
                               <td style={{ padding: "10px 20px" }}>
-                                <span style={{ background: ok ? "#166534" : "#7f1d1d", color: ok ? "#86efac" : "#fca5a5", padding: "3px 10px", borderRadius: 6, fontWeight: 700, fontSize: 13 }}>
-                                  {p.avg.toFixed(1)}€
-                                </span>
+                                <span style={{ background: ok ? "#166534" : "#7f1d1d", color: ok ? "#86efac" : "#fca5a5", padding: "3px 10px", borderRadius: 6, fontWeight: 700, fontSize: 13 }}>{p.avg.toFixed(1)}€</span>
                               </td>
                             </tr>
                           );
@@ -287,16 +274,13 @@ function AdminPage({ onLogout }) {
                       </tbody>
                     </table>
                   )}
-                  {m.byPlatform.length === 0 && (
-                    <div style={{ padding: "12px 20px", color: "#475569", fontSize: 13 }}>Нет данных</div>
-                  )}
+                  {m.byPlatform.length === 0 && <div style={{ padding: "12px 20px", color: "#475569", fontSize: 13 }}>Нет данных</div>}
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* MANAGERS TAB */}
         {tab === "managers" && (
           <div>
             <h2 style={{ color: "#fff", marginBottom: 24, fontSize: 20 }}>Менеджеры</h2>
@@ -321,19 +305,11 @@ function AdminPage({ onLogout }) {
                   return (
                     <tr key={m.id} style={{ borderBottom: "1px solid #1e2235" }}>
                       <td style={{ ...S.td, fontWeight: 600, color: "#e2e8f0" }}>{m.name}</td>
-                      <td style={S.td}>
-                        <code style={{ background: "#0f1117", border: "1px solid #2d3148", padding: "4px 10px", borderRadius: 6, fontSize: 13, color: "#a5b4fc", letterSpacing: "0.1em" }}>{m.token}</code>
-                      </td>
-                      <td style={S.td}>
-                        <span style={{ background: m.is_active ? "#14532d" : "#1e2235", color: m.is_active ? "#86efac" : "#64748b", padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
-                          {m.is_active ? "Активен" : "Отключён"}
-                        </span>
-                      </td>
+                      <td style={S.td}><code style={{ background: "#0f1117", border: "1px solid #2d3148", padding: "4px 10px", borderRadius: 6, fontSize: 13, color: "#a5b4fc", letterSpacing: "0.1em" }}>{m.token}</code></td>
+                      <td style={S.td}><span style={{ background: m.is_active ? "#14532d" : "#1e2235", color: m.is_active ? "#86efac" : "#64748b", padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{m.is_active ? "Активен" : "Отключён"}</span></td>
                       <td style={{ ...S.td, color: "#94a3b8" }}>{count}</td>
                       <td style={{ ...S.td, display: "flex", gap: 8 }}>
-                        <button onClick={() => toggleManager(m)} style={{ background: "#1e2235", border: "1px solid #2d3148", color: "#94a3b8", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
-                          {m.is_active ? "Отключить" : "Включить"}
-                        </button>
+                        <button onClick={() => toggleManager(m)} style={{ background: "#1e2235", border: "1px solid #2d3148", color: "#94a3b8", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>{m.is_active ? "Отключить" : "Включить"}</button>
                         <button onClick={() => deleteManager(m.id)} style={{ background: "#7f1d1d", border: "none", color: "#fca5a5", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>Удалить</button>
                       </td>
                     </tr>
@@ -344,7 +320,6 @@ function AdminPage({ onLogout }) {
           </div>
         )}
 
-        {/* PLATFORMS TAB */}
         {tab === "platforms" && (
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
@@ -365,16 +340,10 @@ function AdminPage({ onLogout }) {
                       <td style={{ ...S.td, fontWeight: 600, color: "#e2e8f0" }}>{p.name}</td>
                       <td style={{ ...S.td, color: "#94a3b8" }}>{p.date_added || "—"}</td>
                       <td style={{ ...S.td, color: "#94a3b8" }}>{p.target_avg_check}€</td>
-                      <td style={S.td}>
-                        <span style={{ background: isActive ? "#14532d" : "#1e2235", color: isActive ? "#86efac" : "#64748b", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
-                          {isActive ? "Активна" : "Скрыта"}
-                        </span>
-                      </td>
+                      <td style={S.td}><span style={{ background: isActive ? "#14532d" : "#1e2235", color: isActive ? "#86efac" : "#64748b", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{isActive ? "Активна" : "Скрыта"}</span></td>
                       <td style={{ ...S.td, display: "flex", gap: 8 }}>
                         <button onClick={() => openPlatformForm(p)} style={{ background: "#1e2235", border: "1px solid #2d3148", color: "#94a3b8", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>Изменить</button>
-                        <button onClick={() => togglePlatform(p)} style={{ background: "#1e3a5f", border: "none", color: "#93c5fd", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
-                          {isActive ? "Скрыть" : "Показать"}
-                        </button>
+                        <button onClick={() => togglePlatform(p)} style={{ background: "#1e3a5f", border: "none", color: "#93c5fd", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>{isActive ? "Скрыть" : "Показать"}</button>
                         <button onClick={() => deletePlatform(p.id)} style={{ background: "#7f1d1d", border: "none", color: "#fca5a5", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>Удалить</button>
                       </td>
                     </tr>
@@ -385,7 +354,6 @@ function AdminPage({ onLogout }) {
           </div>
         )}
 
-        {/* OFFERS TAB */}
         {tab === "offers" && (
           <div>
             <h2 style={{ color: "#fff", marginBottom: 24, fontSize: 20 }}>Офферы</h2>
@@ -413,11 +381,7 @@ function AdminPage({ onLogout }) {
                           <span style={{ color: "#94a3b8", fontSize: 13, minWidth: 60 }}>{done} / {o.cap}</span>
                         </div>
                       </td>
-                      <td style={S.td}>
-                        <span style={{ background: o.status === "active" ? "#1e3a5f" : "#1e2235", color: o.status === "active" ? "#93c5fd" : "#64748b", padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
-                          {o.status === "active" ? "Работает" : "Стоп"}
-                        </span>
-                      </td>
+                      <td style={S.td}><span style={{ background: o.status === "active" ? "#1e3a5f" : "#1e2235", color: o.status === "active" ? "#93c5fd" : "#64748b", padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{o.status === "active" ? "Работает" : "Стоп"}</span></td>
                     </tr>
                   );
                 })}
@@ -439,10 +403,12 @@ function ManagerPage({ manager, onLogout }) {
   const [saving, setSaving] = useState(null);
   const [toast, setToast] = useState(null);
   const [managerTab, setManagerTab] = useState("deposit");
+  const [editingDeposit, setEditingDeposit] = useState(null); // { platformId, count, amount }
+  const [lastAction, setLastAction] = useState(null); // for undo
 
-  const showToast = (msg, type = "ok") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+  const showToast = (msg, type = "ok", onUndo = null) => {
+    setToast({ msg, type, onUndo });
+    setTimeout(() => setToast(null), 5000);
   };
 
   const load = async () => {
@@ -469,16 +435,67 @@ function ManagerPage({ manager, onLogout }) {
     const count = parseInt(inp.count) || 0;
     const amount = parseFloat(inp.amount) || 0;
     if (count <= 0 || amount <= 0) { showToast("Введи кол-во и сумму", "error"); return; }
+
     setSaving(platformId);
     const existing = getDeposit(platformId);
+
+    // Save previous state for undo
+    const prevState = existing ? { count: existing.count, amount: Number(existing.amount) } : null;
+
     if (existing) {
       await supabase.from("deposits").update({ count: existing.count + count, amount: Number(existing.amount) + amount }).eq("id", existing.id);
+      setLastAction({ type: "update", depositId: existing.id, prevState });
     } else {
-      await supabase.from("deposits").insert({ manager_id: manager.id, platform_id: platformId, count, amount });
+      const { data } = await supabase.from("deposits").insert({ manager_id: manager.id, platform_id: platformId, count, amount }).select().single();
+      setLastAction({ type: "insert", depositId: data?.id });
     }
+
     setInputs(prev => ({ ...prev, [platformId]: { count: "", amount: "" } }));
     setSaving(null);
-    showToast("Добавлено!");
+
+    showToast("Добавлено!", "ok", async () => {
+      await undoLastAction(existing, prevState, platformId);
+    });
+    load();
+  };
+
+  const undoLastAction = async (existing, prevState, platformId) => {
+    if (existing && prevState) {
+      // Restore previous values
+      await supabase.from("deposits").update({ count: prevState.count, amount: prevState.amount }).eq("id", existing.id);
+    } else {
+      // Delete the newly inserted deposit
+      const dep = deposits.find(d => d.platform_id === platformId);
+      if (dep) await supabase.from("deposits").delete().eq("id", dep.id);
+    }
+    setToast(null);
+    showToast("Действие отменено");
+    load();
+  };
+
+  const startEdit = (platformId) => {
+    const dep = getDeposit(platformId);
+    if (!dep) return;
+    setEditingDeposit({ platformId, count: dep.count, amount: Number(dep.amount) });
+  };
+
+  const saveEdit = async () => {
+    if (!editingDeposit) return;
+    const { platformId, count, amount } = editingDeposit;
+    const cnt = parseInt(count) || 0;
+    const amt = parseFloat(amount) || 0;
+    if (cnt <= 0 || amt <= 0) { showToast("Введи корректные значения", "error"); return; }
+    const dep = getDeposit(platformId);
+    if (!dep) return;
+    const prevState = { count: dep.count, amount: Number(dep.amount) };
+    await supabase.from("deposits").update({ count: cnt, amount: amt }).eq("id", dep.id);
+    setEditingDeposit(null);
+    showToast("Данные обновлены!", "ok", async () => {
+      await supabase.from("deposits").update(prevState).eq("id", dep.id);
+      setToast(null);
+      showToast("Изменение отменено");
+      load();
+    });
     load();
   };
 
@@ -493,7 +510,31 @@ function ManagerPage({ manager, onLogout }) {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0f1117", color: "#e2e8f0", fontFamily: "'Inter', sans-serif" }}>
-      {toast && <Toast msg={toast.msg} type={toast.type} />}
+      {toast && <Toast msg={toast.msg} type={toast.type} onUndo={toast.onUndo} />}
+
+      {/* Edit modal */}
+      {editingDeposit && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#1a1d27", border: "1px solid #2d3148", borderRadius: 14, padding: 28, width: 380 }}>
+            <h3 style={{ color: "#fff", marginBottom: 6, fontSize: 16 }}>Редактировать данные</h3>
+            <p style={{ color: "#64748b", fontSize: 13, marginBottom: 20 }}>
+              {platforms.find(p => p.id === editingDeposit.platformId)?.name}
+            </p>
+            {[["Кол-во депозитов", "count", "number"], ["Общая сумма (€)", "amount", "number"]].map(([label, key, type]) => (
+              <div key={key} style={{ marginBottom: 14 }}>
+                <label style={{ display: "block", fontSize: 11, color: "#64748b", marginBottom: 5, fontWeight: 600, textTransform: "uppercase" }}>{label}</label>
+                <input type={type} value={editingDeposit[key]}
+                  onChange={e => setEditingDeposit(prev => ({ ...prev, [key]: e.target.value }))}
+                  style={{ width: "100%", background: "#0f1117", border: "1px solid #2d3148", color: "#e2e8f0", padding: "10px 12px", borderRadius: 8, fontSize: 15, outline: "none", boxSizing: "border-box" }} />
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+              <button onClick={saveEdit} style={{ flex: 1, background: "#6366f1", color: "#fff", border: "none", padding: "11px", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 14 }}>Сохранить</button>
+              <button onClick={() => setEditingDeposit(null)} style={{ flex: 1, background: "#1e2235", color: "#94a3b8", border: "1px solid #2d3148", padding: "11px", borderRadius: 8, cursor: "pointer" }}>Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ background: "#1a1d27", borderBottom: "1px solid #2d3148", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -504,7 +545,6 @@ function ManagerPage({ manager, onLogout }) {
         <button onClick={onLogout} style={{ background: "transparent", border: "1px solid #3d4268", color: "#94a3b8", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13 }}>Выйти</button>
       </div>
 
-      {/* Manager tabs */}
       <div style={{ background: "#1a1d27", borderBottom: "1px solid #2d3148", padding: "0 24px", display: "flex" }}>
         {[["deposit", "Внести депозиты"], ["stats", "Мои результаты"], ["info", "Платформы"]].map(([key, label]) => (
           <button key={key} onClick={() => setManagerTab(key)} style={{
@@ -517,7 +557,6 @@ function ManagerPage({ manager, onLogout }) {
 
       <div style={{ padding: "28px 24px", maxWidth: 720, margin: "0 auto" }}>
 
-        {/* DEPOSIT TAB */}
         {managerTab === "deposit" && (
           <div>
             <p style={{ color: "#64748b", fontSize: 14, marginBottom: 24 }}>Добавь депозиты по каждой платформе</p>
@@ -532,7 +571,6 @@ function ManagerPage({ manager, onLogout }) {
 
                 return (
                   <div key={p.id} style={{ background: "#1a1d27", border: "1px solid #2d3148", borderRadius: 12, overflow: "hidden" }}>
-                    {/* Platform header */}
                     <div style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #2d3148" }}>
                       <div>
                         <span style={{ fontWeight: 700, color: "#e2e8f0", fontSize: 15 }}>{p.name}</span>
@@ -548,15 +586,18 @@ function ManagerPage({ manager, onLogout }) {
                       </div>
                     </div>
 
-                    {/* Stats row */}
                     {totalCount > 0 && (
-                      <div style={{ padding: "10px 18px", background: "#151824", display: "flex", gap: 24, borderBottom: "1px solid #2d3148" }}>
-                        <span style={{ color: "#64748b", fontSize: 13 }}>Внесено депозитов: <strong style={{ color: "#cbd5e1" }}>{totalCount}</strong></span>
-                        <span style={{ color: "#64748b", fontSize: 13 }}>Общая сумма: <strong style={{ color: "#cbd5e1" }}>{totalAmount.toFixed(0)}€</strong></span>
+                      <div style={{ padding: "10px 18px", background: "#151824", display: "flex", gap: 24, alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #2d3148" }}>
+                        <div style={{ display: "flex", gap: 24 }}>
+                          <span style={{ color: "#64748b", fontSize: 13 }}>Внесено: <strong style={{ color: "#cbd5e1" }}>{totalCount}</strong></span>
+                          <span style={{ color: "#64748b", fontSize: 13 }}>Сумма: <strong style={{ color: "#cbd5e1" }}>{totalAmount.toFixed(0)}€</strong></span>
+                        </div>
+                        <button onClick={() => startEdit(p.id)} style={{ background: "transparent", border: "1px solid #3d4268", color: "#94a3b8", padding: "4px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
+                          ✏️ Изменить
+                        </button>
                       </div>
                     )}
 
-                    {/* Input row */}
                     <div style={{ padding: "14px 18px", display: "flex", gap: 10, alignItems: "flex-end" }}>
                       <div style={{ flex: 1 }}>
                         <label style={{ display: "block", fontSize: 11, color: "#64748b", marginBottom: 5, fontWeight: 600, textTransform: "uppercase" }}>Кол-во депозитов</label>
@@ -582,7 +623,6 @@ function ManagerPage({ manager, onLogout }) {
           </div>
         )}
 
-        {/* STATS TAB */}
         {managerTab === "stats" && (
           <div>
             <h3 style={{ color: "#fff", marginBottom: 20, fontSize: 18 }}>Мои результаты</h3>
@@ -618,7 +658,6 @@ function ManagerPage({ manager, onLogout }) {
           </div>
         )}
 
-        {/* INFO TAB */}
         {managerTab === "info" && (
           <div>
             <h3 style={{ color: "#fff", marginBottom: 20, fontSize: 18 }}>Информация о платформах</h3>
@@ -630,9 +669,7 @@ function ManagerPage({ manager, onLogout }) {
                       <span style={{ fontWeight: 700, color: "#e2e8f0", fontSize: 15 }}>{p.name}</span>
                       {p.date_added && <span style={{ display: "block", fontSize: 12, color: "#475569", marginTop: 3 }}>Добавлена: {p.date_added}</span>}
                     </div>
-                    <span style={{ background: "#1e3a5f", color: "#93c5fd", padding: "4px 12px", borderRadius: 6, fontWeight: 700, fontSize: 14 }}>
-                      цель {p.target_avg_check}€
-                    </span>
+                    <span style={{ background: "#1e3a5f", color: "#93c5fd", padding: "4px 12px", borderRadius: 6, fontWeight: 700, fontSize: 14 }}>цель {p.target_avg_check}€</span>
                   </div>
                   {p.offer && (
                     <div style={{ background: "#0f1117", borderRadius: 8, padding: "12px 16px", display: "flex", gap: 24 }}>
@@ -685,8 +722,7 @@ function LoginPage({ onLogin }) {
           <div style={{ display: "flex", background: "#0f1117", borderRadius: 8, padding: 3, marginBottom: 24 }}>
             {[["manager", "Менеджер"], ["admin", "Админ"]].map(([key, label]) => (
               <button key={key} onClick={() => { setMode(key); setToken(""); setError(""); }} style={{
-                flex: 1, background: mode === key ? "#6366f1" : "transparent",
-                color: mode === key ? "#fff" : "#64748b",
+                flex: 1, background: mode === key ? "#6366f1" : "transparent", color: mode === key ? "#fff" : "#64748b",
                 border: "none", padding: "8px", borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: 13
               }}>{label}</button>
             ))}
