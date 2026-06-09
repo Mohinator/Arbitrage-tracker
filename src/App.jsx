@@ -38,7 +38,8 @@ function AdminPage({ onLogout }) {
   const [tab, setTab] = useState("overview");
   const [showPlatformForm, setShowPlatformForm] = useState(false);
   const [editingPlatform, setEditingPlatform] = useState(null);
-  const [pForm, setPForm] = useState({ name: "", target_avg_check: "", date_added: "", is_active: true });
+  const [pForm, setPForm] = useState({ name: "", target_avg_check: "", date_added: "", is_active: true, kapa: "" });
+  const [dragIdx, setDragIdx] = useState(null);
 
   const showToast = (msg, type = "ok", onUndo = null) => {
     setToast({ msg, type, onUndo });
@@ -48,7 +49,7 @@ function AdminPage({ onLogout }) {
   const load = async () => {
     const [{ data: m }, { data: p }, { data: d }, { data: o }] = await Promise.all([
       supabase.from("managers").select("*").order("created_at"),
-      supabase.from("platforms").select("*").order("name"),
+      supabase.from("platforms").select("*").order("sort_order", { ascending: true, nullsFirst: false }).order("name"),
       supabase.from("deposits").select("*"),
       supabase.from("offers").select("*, platforms(name)").order("date"),
     ]);
@@ -84,23 +85,39 @@ function AdminPage({ onLogout }) {
   const openPlatformForm = (p = null) => {
     if (p) {
       setEditingPlatform(p);
-      setPForm({ name: p.name, target_avg_check: p.target_avg_check, date_added: p.date_added || "", is_active: p.is_active !== false });
+      const offer = offers.find(o => o.platform_id === p.id);
+      setPForm({ name: p.name, target_avg_check: p.target_avg_check, date_added: p.date_added || "", is_active: p.is_active !== false, kapa: offer?.cap ?? "" });
     } else {
       setEditingPlatform(null);
-      setPForm({ name: "", target_avg_check: "", date_added: new Date().toISOString().slice(0,10), is_active: true });
+      setPForm({ name: "", target_avg_check: "", date_added: new Date().toISOString().slice(0,10), is_active: true, kapa: "" });
     }
     setShowPlatformForm(true);
   };
 
   const savePlatform = async () => {
     if (!pForm.name.trim() || !pForm.target_avg_check) { showToast("Заполни все поля", "error"); return; }
+    const maxOrder = platforms.length > 0 ? Math.max(...platforms.map(p => p.sort_order || 0)) : 0;
     const data = { name: pForm.name.trim(), target_avg_check: Number(pForm.target_avg_check), date_added: pForm.date_added || null, is_active: pForm.is_active };
+    let platformId = editingPlatform?.id;
     if (editingPlatform) {
       await supabase.from("platforms").update(data).eq("id", editingPlatform.id);
       showToast("Платформа обновлена!");
     } else {
-      await supabase.from("platforms").insert(data);
+      const { data: newP } = await supabase.from("platforms").insert({ ...data, sort_order: maxOrder + 1 }).select().single();
+      platformId = newP?.id;
       showToast("Платформа добавлена!");
+    }
+    // Handle kapa/offer
+    if (platformId) {
+      const existingOffer = offers.find(o => o.platform_id === platformId);
+      const kapa = pForm.kapa ? parseInt(pForm.kapa) : null;
+      if (kapa && existingOffer) {
+        await supabase.from("offers").update({ cap: kapa }).eq("id", existingOffer.id);
+      } else if (kapa && !existingOffer) {
+        await supabase.from("offers").insert({ platform_id: platformId, date: pForm.date_added || new Date().toISOString().slice(0,10), cap: kapa, status: "active" });
+      } else if (!kapa && existingOffer) {
+        await supabase.from("offers").delete().eq("id", existingOffer.id);
+      }
     }
     setShowPlatformForm(false);
     load();
@@ -115,6 +132,24 @@ function AdminPage({ onLogout }) {
     if (!confirm("Удалить платформу и все её данные?")) return;
     await supabase.from("platforms").delete().eq("id", id);
     load();
+  };
+
+  const handleDragStart = (idx) => setDragIdx(idx);
+  const handleDragOver = (e, idx) => {
+    e.preventDefault();
+    if (dragIdx === null || dragIdx === idx) return;
+    const reordered = [...platforms];
+    const [moved] = reordered.splice(dragIdx, 1);
+    reordered.splice(idx, 0, moved);
+    setPlatforms(reordered);
+    setDragIdx(idx);
+  };
+  const handleDragEnd = async () => {
+    setDragIdx(null);
+    // Save new order to DB
+    await Promise.all(platforms.map((p, i) =>
+      supabase.from("platforms").update({ sort_order: i }).eq("id", p.id)
+    ));
   };
 
   const activePlatforms = platforms.filter(p => p.is_active !== false);
@@ -155,7 +190,7 @@ function AdminPage({ onLogout }) {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ background: "#1a1d27", border: "1px solid #2d3148", borderRadius: 14, padding: 28, width: 400 }}>
             <h3 style={{ color: "#fff", marginBottom: 20, fontSize: 16 }}>{editingPlatform ? "Редактировать платформу" : "Добавить платформу"}</h3>
-            {[["Название", "name", "text", "PL ClickID XON"], ["Целевой СЧ (€)", "target_avg_check", "number", "50"], ["Дата добавления", "date_added", "date", ""]].map(([label, key, type, ph]) => (
+            {[["Название", "name", "text", "PL ClickID XON"], ["Целевой СЧ (€)", "target_avg_check", "number", "50"], ["Капа (кол-во депозитов)", "kapa", "number", "20"], ["Дата добавления", "date_added", "date", ""]].map(([label, key, type, ph]) => (
               <div key={key} style={{ marginBottom: 14 }}>
                 <label style={{ display: "block", fontSize: 11, color: "#64748b", marginBottom: 5, fontWeight: 600, textTransform: "uppercase" }}>{label}</label>
                 <input type={type} value={pForm[key]} placeholder={ph}
@@ -341,8 +376,13 @@ function AdminPage({ onLogout }) {
                   const kapa = offer?.cap ?? null;
                   const pct = kapa ? Math.min(100, Math.round((done / kapa) * 100)) : 0;
                   return (
-                    <tr key={p.id} style={{ borderBottom: "1px solid #1e2235", opacity: isActive ? 1 : 0.5 }}>
-                      <td style={{ ...S.td, fontWeight: 600, color: "#e2e8f0" }}>{p.name}</td>
+                    <tr key={p.id} draggable onDragStart={() => handleDragStart(platforms.indexOf(p))} onDragOver={(e) => handleDragOver(e, platforms.indexOf(p))} onDragEnd={handleDragEnd} style={{ borderBottom: "1px solid #1e2235", opacity: isActive ? 1 : 0.5, cursor: "grab" }}>
+                      <td style={{ ...S.td, fontWeight: 600, color: "#e2e8f0" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ color: "#3d4268", fontSize: 14, cursor: "grab", userSelect: "none" }}>⠿</span>
+                          {p.name}
+                        </div>
+                      </td>
                       <td style={{ ...S.td, color: "#94a3b8" }}>{p.date_added || "—"}</td>
                       <td style={{ ...S.td, color: "#94a3b8" }}>{p.target_avg_check}€</td>
                       <td style={{ ...S.td, color: "#94a3b8" }}>{kapa ?? "—"}</td>
