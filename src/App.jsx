@@ -430,65 +430,79 @@ function ManagerPage({ manager, onLogout }) {
     setInputs(prev => ({ ...prev, [platformId]: { ...prev[platformId], [field]: value } }));
   };
 
+  const setType = (platformId, type) => {
+    setInputs(prev => ({ ...prev, [platformId]: { ...prev[platformId], type } }));
+  };
+
   const saveDeposit = async (platformId) => {
     const inp = inputs[platformId] || {};
-    const count = parseInt(inp.count) || 0;
+    const type = inp.type || "deposit";
     const amount = parseFloat(inp.amount) || 0;
-    if (count <= 0 || amount <= 0) { showToast("Введи кол-во и сумму", "error"); return; }
+    if (amount <= 0) { showToast("Введи сумму", "error"); return; }
 
     setSaving(platformId);
     const existing = getDeposit(platformId);
-
-    // Save previous state for undo
-    const prevState = existing ? { count: existing.count, amount: Number(existing.amount) } : null;
+    const prevState = existing ? {
+      count: existing.count,
+      amount: Number(existing.amount),
+      redeposit_amount: Number(existing.redeposit_amount || 0)
+    } : null;
 
     if (existing) {
-      await supabase.from("deposits").update({ count: existing.count + count, amount: Number(existing.amount) + amount }).eq("id", existing.id);
-      setLastAction({ type: "update", depositId: existing.id, prevState });
+      const updates = {
+        amount: Number(existing.amount) + (type === "deposit" ? amount : 0),
+        redeposit_amount: Number(existing.redeposit_amount || 0) + (type === "redeposit" ? amount : 0),
+        count: existing.count + (type === "deposit" ? 1 : 0),
+      };
+      await supabase.from("deposits").update(updates).eq("id", existing.id);
     } else {
-      const { data } = await supabase.from("deposits").insert({ manager_id: manager.id, platform_id: platformId, count, amount }).select().single();
-      setLastAction({ type: "insert", depositId: data?.id });
+      await supabase.from("deposits").insert({
+        manager_id: manager.id,
+        platform_id: platformId,
+        count: type === "deposit" ? 1 : 0,
+        amount: type === "deposit" ? amount : 0,
+        redeposit_amount: type === "redeposit" ? amount : 0,
+      });
     }
 
-    setInputs(prev => ({ ...prev, [platformId]: { count: "", amount: "" } }));
+    setInputs(prev => ({ ...prev, [platformId]: { type, amount: "" } }));
     setSaving(null);
-
-    showToast("Добавлено!", "ok", async () => {
-      await undoLastAction(existing, prevState, platformId);
+    showToast(type === "deposit" ? "Депозит добавлен!" : "Редепозит добавлен!", "ok", async () => {
+      if (existing && prevState) {
+        await supabase.from("deposits").update(prevState).eq("id", existing.id);
+      } else {
+        const dep = deposits.find(d => d.platform_id === platformId);
+        if (dep) await supabase.from("deposits").delete().eq("id", dep.id);
+      }
+      setToast(null);
+      showToast("Действие отменено");
+      load();
     });
-    load();
-  };
-
-  const undoLastAction = async (existing, prevState, platformId) => {
-    if (existing && prevState) {
-      // Restore previous values
-      await supabase.from("deposits").update({ count: prevState.count, amount: prevState.amount }).eq("id", existing.id);
-    } else {
-      // Delete the newly inserted deposit
-      const dep = deposits.find(d => d.platform_id === platformId);
-      if (dep) await supabase.from("deposits").delete().eq("id", dep.id);
-    }
-    setToast(null);
-    showToast("Действие отменено");
     load();
   };
 
   const startEdit = (platformId) => {
     const dep = getDeposit(platformId);
     if (!dep) return;
-    setEditingDeposit({ platformId, count: dep.count, amount: Number(dep.amount) });
+    setEditingDeposit({
+      platformId,
+      count: dep.count,
+      amount: Number(dep.amount),
+      redeposit_amount: Number(dep.redeposit_amount || 0)
+    });
   };
 
   const saveEdit = async () => {
     if (!editingDeposit) return;
-    const { platformId, count, amount } = editingDeposit;
+    const { platformId, count, amount, redeposit_amount } = editingDeposit;
     const cnt = parseInt(count) ?? 0;
     const amt = parseFloat(amount) ?? 0;
-    if (cnt < 0 || amt < 0) { showToast("Введи корректные значения", "error"); return; }
+    const redep = parseFloat(redeposit_amount) ?? 0;
+    if (cnt < 0 || amt < 0 || redep < 0) { showToast("Введи корректные значения", "error"); return; }
     const dep = getDeposit(platformId);
     if (!dep) return;
-    const prevState = { count: dep.count, amount: Number(dep.amount) };
-    await supabase.from("deposits").update({ count: cnt, amount: amt }).eq("id", dep.id);
+    const prevState = { count: dep.count, amount: Number(dep.amount), redeposit_amount: Number(dep.redeposit_amount || 0) };
+    await supabase.from("deposits").update({ count: cnt, amount: amt, redeposit_amount: redep }).eq("id", dep.id);
     setEditingDeposit(null);
     showToast("Данные обновлены!", "ok", async () => {
       await supabase.from("deposits").update(prevState).eq("id", dep.id);
@@ -502,8 +516,8 @@ function ManagerPage({ manager, onLogout }) {
   const resetDeposit = async (platformId) => {
     const dep = getDeposit(platformId);
     if (!dep) return;
-    const prevState = { count: dep.count, amount: Number(dep.amount) };
-    await supabase.from("deposits").update({ count: 0, amount: 0 }).eq("id", dep.id);
+    const prevState = { count: dep.count, amount: Number(dep.amount), redeposit_amount: Number(dep.redeposit_amount || 0) };
+    await supabase.from("deposits").update({ count: 0, amount: 0, redeposit_amount: 0 }).eq("id", dep.id);
     setEditingDeposit(null);
     showToast("Данные сброшены", "ok", async () => {
       await supabase.from("deposits").update(prevState).eq("id", dep.id);
@@ -517,10 +531,12 @@ function ManagerPage({ manager, onLogout }) {
   const myPlatformStats = platforms.map(p => {
     const dep = getDeposit(p.id);
     const cnt = dep?.count || 0;
-    const amt = dep ? Number(dep.amount) : 0;
-    const avg = cnt > 0 ? amt / cnt : 0;
+    const depAmt = dep ? Number(dep.amount) : 0;
+    const redepAmt = dep ? Number(dep.redeposit_amount || 0) : 0;
+    const totalAmt = depAmt + redepAmt;
+    const avg = cnt > 0 ? totalAmt / cnt : 0;
     const offer = offers.find(o => o.platform_id === p.id);
-    return { ...p, cnt, amt, avg, offer };
+    return { ...p, cnt, depAmt, redepAmt, totalAmt, avg, offer };
   });
 
   return (
@@ -535,10 +551,10 @@ function ManagerPage({ manager, onLogout }) {
             <p style={{ color: "#64748b", fontSize: 13, marginBottom: 20 }}>
               {platforms.find(p => p.id === editingDeposit.platformId)?.name}
             </p>
-            {[["Кол-во депозитов", "count", "number"], ["Общая сумма (€)", "amount", "number"]].map(([label, key, type]) => (
+            {[["Кол-во депозитов (Депи)", "count", "number"], ["Сумма депозитов (€)", "amount", "number"], ["Сумма редепозитов (€)", "redeposit_amount", "number"]].map(([label, key, type]) => (
               <div key={key} style={{ marginBottom: 14 }}>
                 <label style={{ display: "block", fontSize: 11, color: "#64748b", marginBottom: 5, fontWeight: 600, textTransform: "uppercase" }}>{label}</label>
-                <input type={type} value={editingDeposit[key]}
+                <input type={type} value={editingDeposit[key] ?? 0}
                   onChange={e => setEditingDeposit(prev => ({ ...prev, [key]: e.target.value }))}
                   style={{ width: "100%", background: "#0f1117", border: "1px solid #2d3148", color: "#e2e8f0", padding: "10px 12px", borderRadius: 8, fontSize: 15, outline: "none", boxSizing: "border-box" }} />
               </div>
@@ -580,7 +596,9 @@ function ManagerPage({ manager, onLogout }) {
               {platforms.map(p => {
                 const dep = getDeposit(p.id);
                 const totalCount = dep?.count || 0;
-                const totalAmount = dep ? Number(dep.amount) : 0;
+                const totalDepAmount = dep ? Number(dep.amount) : 0;
+                const totalRedepAmount = dep ? Number(dep.redeposit_amount || 0) : 0;
+                const totalAmount = totalDepAmount + totalRedepAmount;
                 const avgCheck = totalCount > 0 ? totalAmount / totalCount : 0;
                 const ok = avgCheck >= p.target_avg_check;
                 const inp = inputs[p.id] || {};
@@ -603,10 +621,12 @@ function ManagerPage({ manager, onLogout }) {
                     </div>
 
                     {totalCount > 0 && (
-                      <div style={{ padding: "10px 18px", background: "#151824", display: "flex", gap: 24, alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #2d3148" }}>
-                        <div style={{ display: "flex", gap: 24 }}>
-                          <span style={{ color: "#64748b", fontSize: 13 }}>Внесено: <strong style={{ color: "#cbd5e1" }}>{totalCount}</strong></span>
-                          <span style={{ color: "#64748b", fontSize: 13 }}>Сумма: <strong style={{ color: "#cbd5e1" }}>{totalAmount.toFixed(0)}€</strong></span>
+                      <div style={{ padding: "10px 18px", background: "#151824", display: "flex", gap: 16, alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #2d3148", flexWrap: "wrap" }}>
+                        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                          <span style={{ color: "#64748b", fontSize: 13 }}>Депи: <strong style={{ color: "#a5b4fc" }}>{totalCount}</strong></span>
+                          <span style={{ color: "#64748b", fontSize: 13 }}>Деп: <strong style={{ color: "#cbd5e1" }}>{totalDepAmount.toFixed(0)}€</strong></span>
+                          <span style={{ color: "#64748b", fontSize: 13 }}>Редеп: <strong style={{ color: "#5eead4" }}>{totalRedepAmount.toFixed(0)}€</strong></span>
+                          <span style={{ color: "#64748b", fontSize: 13 }}>Итого: <strong style={{ color: "#cbd5e1" }}>{totalAmount.toFixed(0)}€</strong></span>
                         </div>
                         <button onClick={() => startEdit(p.id)} style={{ background: "transparent", border: "1px solid #3d4268", color: "#94a3b8", padding: "4px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
                           Изменить
@@ -614,23 +634,30 @@ function ManagerPage({ manager, onLogout }) {
                       </div>
                     )}
 
-                    <div style={{ padding: "14px 18px", display: "flex", gap: 10, alignItems: "flex-end" }}>
-                      <div style={{ flex: 1 }}>
-                        <label style={{ display: "block", fontSize: 11, color: "#64748b", marginBottom: 5, fontWeight: 600, textTransform: "uppercase" }}>Кол-во депозитов</label>
-                        <input type="number" min="1" value={inp.count || ""} onChange={e => handleInput(p.id, "count", e.target.value)}
-                          placeholder="Например: 3"
-                          style={{ width: "100%", background: "#0f1117", border: "1px solid #2d3148", color: "#e2e8f0", padding: "11px 14px", borderRadius: 8, fontSize: 15, outline: "none", boxSizing: "border-box" }} />
+                    <div style={{ padding: "14px 18px" }}>
+                      <div style={{ display: "flex", background: "#0f1117", borderRadius: 8, padding: 3, marginBottom: 12 }}>
+                        {[["deposit", "Депозит"], ["redeposit", "Редепозит"]].map(([t, label]) => (
+                          <button key={t} onClick={() => setType(p.id, t)} style={{
+                            flex: 1, background: (inp.type || "deposit") === t ? (t === "deposit" ? "#6366f1" : "#0f766e") : "transparent",
+                            color: (inp.type || "deposit") === t ? "#fff" : "#64748b",
+                            border: "none", padding: "8px", borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: 13
+                          }}>{label}</button>
+                        ))}
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <label style={{ display: "block", fontSize: 11, color: "#64748b", marginBottom: 5, fontWeight: 600, textTransform: "uppercase" }}>Общая сумма (€)</label>
-                        <input type="number" min="1" value={inp.amount || ""} onChange={e => handleInput(p.id, "amount", e.target.value)}
-                          placeholder="Например: 165"
-                          style={{ width: "100%", background: "#0f1117", border: "1px solid #2d3148", color: "#e2e8f0", padding: "11px 14px", borderRadius: 8, fontSize: 15, outline: "none", boxSizing: "border-box" }} />
+                      <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ display: "block", fontSize: 11, color: "#64748b", marginBottom: 5, fontWeight: 600, textTransform: "uppercase" }}>
+                            {(inp.type || "deposit") === "deposit" ? "Сумма депозита (€)" : "Сумма редепозита (€)"}
+                          </label>
+                          <input type="number" min="0" value={inp.amount || ""} onChange={e => handleInput(p.id, "amount", e.target.value)}
+                            placeholder="Например: 55"
+                            style={{ width: "100%", background: "#0f1117", border: "1px solid #2d3148", color: "#e2e8f0", padding: "11px 14px", borderRadius: 8, fontSize: 15, outline: "none", boxSizing: "border-box" }} />
+                        </div>
+                        <button onClick={() => saveDeposit(p.id)} disabled={saving === p.id} style={{
+                          background: saving === p.id ? "#374151" : (inp.type || "deposit") === "deposit" ? "#6366f1" : "#0f766e",
+                          color: "#fff", border: "none", padding: "11px 22px", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 14, whiteSpace: "nowrap"
+                        }}>{saving === p.id ? "..." : "Добавить"}</button>
                       </div>
-                      <button onClick={() => saveDeposit(p.id)} disabled={saving === p.id} style={{
-                        background: saving === p.id ? "#3730a3" : "#6366f1", color: "#fff", border: "none",
-                        padding: "11px 22px", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 14, whiteSpace: "nowrap"
-                      }}>{saving === p.id ? "..." : "Добавить"}</button>
                     </div>
                   </div>
                 );
