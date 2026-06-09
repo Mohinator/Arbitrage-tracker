@@ -127,8 +127,9 @@ function AdminPage({ onLogout }) {
       const pd = deps.filter(d => d.platform_id === p.id);
       const cnt = pd.reduce((s, d) => s + d.count, 0);
       const amt = pd.reduce((s, d) => s + Number(d.amount) + Number(d.redeposit_amount || 0), 0);
+      const blik = pd.reduce((s, d) => s + (d.blik_count || 0), 0);
       const avg = cnt > 0 ? amt / cnt : 0;
-      return { ...p, cnt, amt, avg };
+      return { ...p, cnt, amt, blik, avg };
     }).filter(p => p.cnt > 0);
     return { ...m, totalCount, totalAmount, byPlatform };
   });
@@ -262,17 +263,30 @@ function AdminPage({ onLogout }) {
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
                         <tr style={{ background: "#151824" }}>
-                          {["Платформа", "Депи", "Сумма", "СЧ цель", "СЧ факт"].map(h => <th key={h} style={{ ...S.th, padding: "8px 20px" }}>{h}</th>)}
+                          {["Платформа", "Депи", "Сумма", "BLIK", "СЧ цель", "СЧ факт"].map(h => <th key={h} style={{ ...S.th, padding: "8px 20px" }}>{h}</th>)}
                         </tr>
                       </thead>
                       <tbody>
                         {m.byPlatform.map(p => {
                           const ok = p.avg >= p.target_avg_check;
+                          const blikPct = p.cnt > 0 ? Math.round((p.blik / p.cnt) * 100) : 0;
+                          const fdPct = 100 - blikPct;
                           return (
                             <tr key={p.id}>
                               <td style={{ padding: "10px 20px", color: "#cbd5e1", fontSize: 13 }}>{p.name}</td>
                               <td style={{ padding: "10px 20px", color: "#94a3b8", fontSize: 13 }}>{p.cnt}</td>
                               <td style={{ padding: "10px 20px", color: "#94a3b8", fontSize: 13 }}>{p.amt.toFixed(0)}€</td>
+                              <td style={{ padding: "10px 20px" }}>
+                                {p.cnt > 0 ? (
+                                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                    <div style={{ width: 40, background: "#0f1117", borderRadius: 3, height: 4, overflow: "hidden", display: "flex" }}>
+                                      <div style={{ width: `${fdPct}%`, height: "100%", background: "#6366f1" }} />
+                                      <div style={{ width: `${blikPct}%`, height: "100%", background: "#d97706" }} />
+                                    </div>
+                                    <span style={{ color: "#d97706", fontSize: 11 }}>{p.blik} ({blikPct}%)</span>
+                                  </div>
+                                ) : <span style={{ color: "#475569" }}>—</span>}
+                              </td>
                               <td style={{ padding: "10px 20px", color: "#94a3b8", fontSize: 13 }}>{p.target_avg_check}€</td>
                               <td style={{ padding: "10px 20px" }}>
                                 <span style={{ background: ok ? "#166534" : "#7f1d1d", color: ok ? "#86efac" : "#fca5a5", padding: "3px 9px", borderRadius: 6, fontWeight: 700, fontSize: 12 }}>{p.avg.toFixed(1)}€</span>
