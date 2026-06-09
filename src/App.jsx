@@ -185,7 +185,7 @@ function AdminPage({ onLogout }) {
       </div>
 
       <div style={{ background: "#1a1d27", borderBottom: "1px solid #2d3148", padding: "0 32px", display: "flex" }}>
-        {[["overview", "Сводка"], ["managers", "Менеджеры"], ["platforms", "Платформы"], ["offers", "Офферы"]].map(([key, label]) => (
+        {[["overview", "Сводка"], ["managers", "Менеджеры"], ["platforms", "Платформы и офферы"]].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} style={{
             background: "transparent", border: "none", color: tab === key ? "#6366f1" : "#64748b",
             padding: "14px 20px", cursor: "pointer", fontSize: 14, fontWeight: 600,
@@ -323,65 +323,53 @@ function AdminPage({ onLogout }) {
         {tab === "platforms" && (
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-              <h2 style={{ color: "#fff", fontSize: 20, margin: 0 }}>Платформы</h2>
-              <button onClick={() => openPlatformForm()} style={{ background: "#6366f1", color: "#fff", border: "none", padding: "10px 20px", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 14 }}>+ Добавить</button>
+              <h2 style={{ color: "#fff", fontSize: 20, margin: 0 }}>Платформы и офферы</h2>
+              <button onClick={() => openPlatformForm()} style={{ background: "#6366f1", color: "#fff", border: "none", padding: "10px 20px", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>+ Добавить</button>
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "#1e2235" }}>
-                  {["Платформа", "Дата добавления", "Цель СЧ", "Статус", "Действия"].map(h => <th key={h} style={S.th}>{h}</th>)}
+                  {["Платформа", "Дата", "Цель СЧ", "Капа", "Выполнено", "Статус", "Действия"].map(h => <th key={h} style={S.th}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {platforms.map(p => {
                   const isActive = p.is_active !== false;
+                  const deps = deposits.filter(d => d.platform_id === p.id);
+                  const done = deps.reduce((s, d) => s + d.count, 0);
+                  const offer = offers.find(o => o.platform_id === p.id);
+                  const kapa = offer?.cap ?? null;
+                  const pct = kapa ? Math.min(100, Math.round((done / kapa) * 100)) : 0;
                   return (
                     <tr key={p.id} style={{ borderBottom: "1px solid #1e2235", opacity: isActive ? 1 : 0.5 }}>
                       <td style={{ ...S.td, fontWeight: 600, color: "#e2e8f0" }}>{p.name}</td>
                       <td style={{ ...S.td, color: "#94a3b8" }}>{p.date_added || "—"}</td>
                       <td style={{ ...S.td, color: "#94a3b8" }}>{p.target_avg_check}€</td>
-                      <td style={S.td}><span style={{ background: isActive ? "#14532d" : "#1e2235", color: isActive ? "#86efac" : "#64748b", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{isActive ? "Активна" : "Скрыта"}</span></td>
-                      <td style={{ ...S.td, display: "flex", gap: 8 }}>
-                        <button onClick={() => openPlatformForm(p)} style={{ background: "#1e2235", border: "1px solid #2d3148", color: "#94a3b8", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>Изменить</button>
-                        <button onClick={() => togglePlatform(p)} style={{ background: "#1e3a5f", border: "none", color: "#93c5fd", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>{isActive ? "Скрыть" : "Показать"}</button>
-                        <button onClick={() => deletePlatform(p.id)} style={{ background: "#7f1d1d", border: "none", color: "#fca5a5", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>Удалить</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {tab === "offers" && (
-          <div>
-            <h2 style={{ color: "#fff", marginBottom: 24, fontSize: 20 }}>Офферы</h2>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "#1e2235" }}>
-                  {["Дата", "Платформа", "Капа", "Выполнено", "Статус"].map(h => <th key={h} style={S.th}>{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {offers.map(o => {
-                  const deps = deposits.filter(d => d.platform_id === o.platform_id);
-                  const done = deps.reduce((s, d) => s + d.count, 0);
-                  const pct = o.cap > 0 ? Math.min(100, Math.round((done / o.cap) * 100)) : 0;
-                  return (
-                    <tr key={o.id} style={{ borderBottom: "1px solid #1e2235" }}>
-                      <td style={{ ...S.td, color: "#94a3b8" }}>{o.date}</td>
-                      <td style={{ ...S.td, color: "#e2e8f0", fontWeight: 600 }}>{o.platforms?.name}</td>
-                      <td style={{ ...S.td, color: "#94a3b8" }}>{o.cap}</td>
+                      <td style={{ ...S.td, color: "#94a3b8" }}>{kapa ?? "—"}</td>
                       <td style={S.td}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <div style={{ flex: 1, background: "#0f1117", borderRadius: 4, height: 6, overflow: "hidden" }}>
-                            <div style={{ width: `${pct}%`, height: "100%", background: pct >= 100 ? "#22c55e" : "#6366f1", borderRadius: 4 }} />
+                        {kapa ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ width: 50, background: "#0f1117", borderRadius: 4, height: 5, overflow: "hidden" }}>
+                              <div style={{ width: `${pct}%`, height: "100%", background: "#6366f1", borderRadius: 4 }} />
+                            </div>
+                            <span style={{ color: "#94a3b8", fontSize: 12 }}>{done}/{kapa}</span>
                           </div>
-                          <span style={{ color: "#94a3b8", fontSize: 13, minWidth: 60 }}>{done} / {o.cap}</span>
+                        ) : <span style={{ color: "#475569" }}>—</span>}
+                      </td>
+                      <td style={S.td}><span style={{ background: isActive ? "#14532d" : "#1e2235", color: isActive ? "#86efac" : "#64748b", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{isActive ? "Активна" : "Скрыта"}</span></td>
+                      <td style={S.td}>
+                        <div style={{ display: "flex", flexDirection: "row", gap: 4, alignItems: "center" }}>
+                          <button onClick={() => openPlatformForm(p)} title="Изменить" style={{ background: "transparent", border: "1px solid #2d3148", color: "#94a3b8", width: 30, height: 30, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          </button>
+                          <button onClick={() => togglePlatform(p)} title={isActive ? "Скрыть" : "Показать"} style={{ background: "transparent", border: "1px solid #2d3148", color: isActive ? "#94a3b8" : "#6366f1", width: 30, height: 30, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            {isActive ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg> : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
+                          </button>
+                          <button onClick={() => deletePlatform(p.id)} title="Удалить" style={{ background: "transparent", border: "1px solid #7f1d1d", color: "#fca5a5", width: 30, height: 30, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                          </button>
                         </div>
                       </td>
-                      <td style={S.td}><span style={{ background: o.status === "active" ? "#1e3a5f" : "#1e2235", color: o.status === "active" ? "#93c5fd" : "#64748b", padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{o.status === "active" ? "Работает" : "Стоп"}</span></td>
                     </tr>
                   );
                 })}
